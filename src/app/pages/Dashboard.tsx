@@ -55,9 +55,6 @@ export function Dashboard() {
   const [isInspecting, setIsInspecting] = useState(false);
   const [activeCategoryFilter, setActiveCategoryFilter] = useState<string>("all");
   const [showDirectoryModal, setShowDirectoryModal] = useState(false);
-  const [customUSNInput, setCustomUSNInput] = useState("");
-  const [showSwitchModal, setShowSwitchModal] = useState(false);
-  const [isEmptyStateMode, setIsEmptyStateMode] = useState(false);
 
   // Initialize and load dashboard data with live session / credentials
   useEffect(() => {
@@ -93,7 +90,6 @@ export function Dashboard() {
             }
           }
           setData(resolved);
-          setCustomUSNInput(resolved.identity.usn);
         }
       } catch (err) {
         console.error("Failed to load student dashboard:", err);
@@ -108,56 +104,6 @@ export function Dashboard() {
       isMounted = false;
     };
   }, [outlet?.session, outlet?.userUSN, outlet?.userName]);
-
-  // Handle switching student credential simulation
-  const handleApplyCustomUSN = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!customUSNInput.trim()) return;
-
-    const trimmed = customUSNInput.trim().toUpperCase();
-    const mockEmail = trimmed.includes("@")
-      ? trimmed.toLowerCase()
-      : `${trimmed.toLowerCase()}@vvce.ac.in`;
-
-    let studentName =
-      trimmed === "4VV21IS042"
-        ? "Pooja Sharma"
-        : trimmed === "4VV22CS057"
-        ? "Aditya P S"
-        : trimmed === "4VV23EC015"
-        ? "Rahul Verma"
-        : `Student (${trimmed})`;
-
-    try {
-      const { data: dbStudent } = await supabase
-        .from("students")
-        .select("full_name")
-        .ilike("usn", trimmed)
-        .maybeSingle();
-
-      if (dbStudent?.full_name) {
-        studentName = dbStudent.full_name;
-      }
-    } catch {}
-
-    const updatedSession = {
-      user: {
-        id: `student-${trimmed.toLowerCase()}`,
-        email: mockEmail,
-        user_metadata: {
-          name: studentName,
-          usn: trimmed,
-        },
-      },
-    };
-
-    localStorage.setItem("vvce_student_session", JSON.stringify(updatedSession));
-    setIsLoading(true);
-    const resolved = await loadStudentDashboard(updatedSession);
-    setData(resolved);
-    setIsLoading(false);
-    setShowSwitchModal(false);
-  };
 
   const priorityColors: Record<string, string> = {
     High: "bg-red-50 text-red-700 border-red-200",
@@ -181,11 +127,11 @@ export function Dashboard() {
       ? DASHBOARD_PLACEHOLDERS
       : DASHBOARD_PLACEHOLDERS.filter((p) => p.category === activeCategoryFilter);
 
-  // Active view data taking into account empty state testing toggle
-  const currentClasses = isEmptyStateMode ? [] : data.todayClasses;
-  const currentAssignments = isEmptyStateMode ? [] : data.pendingAssignments;
-  const currentTests = isEmptyStateMode ? [] : data.upcomingTests;
-  const currentNotices = isEmptyStateMode ? [] : data.recentNotices;
+  // Strictly view-only dataset loaded directly from backend
+  const currentClasses = data.todayClasses;
+  const currentAssignments = data.pendingAssignments;
+  const currentTests = data.upcomingTests;
+  const currentNotices = data.recentNotices;
 
   return (
     <div className="min-h-screen p-4 md:p-8 bg-zinc-50 text-zinc-900">
@@ -294,33 +240,16 @@ export function Dashboard() {
               </div>
             </div>
 
-            {/* Dashboard Action Controls & Placeholder Inspector Toggle */}
+            {/* Dashboard Action Controls & Read-Only Status Indicator */}
             <div className="flex flex-wrap items-center gap-2 self-start lg:self-center">
-              {/* Switch / Test USN Button */}
-              <button
-                type="button"
-                onClick={() => setShowSwitchModal(true)}
-                className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-semibold rounded-lg bg-zinc-100 hover:bg-zinc-200 text-zinc-700 border border-zinc-200 transition-colors"
-                title="Simulate / Switch Login USN"
+              {/* Read-Only Official Status Badge */}
+              <div
+                className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-medium rounded-lg bg-zinc-100 text-zinc-600 border border-zinc-200 select-none cursor-default"
+                title="All academic records are managed by the institution. Student view is strictly read-only."
               >
-                <User size={14} />
-                <span>Switch USN</span>
-              </button>
-
-              {/* Empty State Simulator Toggle */}
-              <button
-                type="button"
-                onClick={() => setIsEmptyStateMode(!isEmptyStateMode)}
-                className={`inline-flex items-center gap-1.5 px-3 py-2 text-xs font-semibold rounded-lg transition-colors border ${
-                  isEmptyStateMode
-                    ? "bg-purple-100 text-purple-800 border-purple-300"
-                    : "bg-white text-zinc-700 border-zinc-200 hover:bg-zinc-50"
-                }`}
-                title="Toggle empty state view to verify empty data placeholders"
-              >
-                <Inbox size={14} />
-                <span>{isEmptyStateMode ? "Reset Demo Data" : "Test Empty States"}</span>
-              </button>
+                <ShieldCheck size={14} className="text-emerald-600" />
+                <span>Verified Record • View Only</span>
+              </div>
 
               {/* Inspector Mode Toggle */}
               <button
@@ -1312,93 +1241,6 @@ export function Dashboard() {
                   Turn On In-Page Inspector
                 </button>
               </div>
-            </div>
-          </div>
-        )}
-
-        {/* ==================================================================== */}
-        {/* MODAL 2: SWITCH / TEST STUDENT USN SIMULATOR                         */}
-        {/* ==================================================================== */}
-        {showSwitchModal && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in">
-            <div className="bg-white rounded-2xl w-full max-w-md p-6 shadow-2xl border border-zinc-200">
-              <div className="flex items-center justify-between mb-4">
-                <div className="flex items-center gap-2">
-                  <IdCard size={20} className="text-zinc-900" />
-                  <h3 className="text-lg font-bold text-zinc-900">
-                    Switch Test Credentials
-                  </h3>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setShowSwitchModal(false)}
-                  className="text-zinc-400 hover:text-zinc-700 text-sm"
-                >
-                  ✕
-                </button>
-              </div>
-
-              <p className="text-xs text-zinc-500 mb-4">
-                Test how the Student Dashboard dynamically calls out any
-                student's Name, Roll Number / USN, and Department credentials.
-              </p>
-
-              <form onSubmit={handleApplyCustomUSN} className="space-y-4">
-                <div>
-                  <label className="block text-xs font-semibold text-zinc-700 mb-1">
-                    Student USN / Roll Number:
-                  </label>
-                  <input
-                    type="text"
-                    value={customUSNInput}
-                    onChange={(e) => setCustomUSNInput(e.target.value)}
-                    placeholder="e.g. 4VV22CS057, 4VV21IS042"
-                    className="w-full bg-zinc-50 border border-zinc-300 rounded-xl px-3 py-2 text-sm font-mono text-zinc-900 focus:outline-none focus:ring-2 focus:ring-black"
-                    required
-                  />
-                </div>
-
-                {/* Quick Presets */}
-                <div>
-                  <span className="text-[11px] text-zinc-500 block mb-1">
-                    Or select sample student credential:
-                  </span>
-                  <div className="flex flex-wrap gap-1.5">
-                    {[
-                      { usn: "4VV22CS057", name: "Aditya P S" },
-                      { usn: "4VV21IS042", name: "Pooja Sharma" },
-                      { usn: "4VV23EC015", name: "Rahul Verma" },
-                    ].map((item) => (
-                      <button
-                        key={item.usn}
-                        type="button"
-                        onClick={() => {
-                          setCustomUSNInput(item.usn);
-                        }}
-                        className="px-2.5 py-1 text-xs font-mono rounded bg-zinc-100 hover:bg-zinc-200 text-zinc-800 border border-zinc-200"
-                      >
-                        {item.usn}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                <div className="pt-2 flex justify-end gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setShowSwitchModal(false)}
-                    className="px-4 py-2 rounded-xl text-xs font-semibold text-zinc-600 hover:bg-zinc-100"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="submit"
-                    className="px-4 py-2 rounded-xl text-xs font-semibold bg-black text-white hover:bg-zinc-800"
-                  >
-                    Apply Credentials
-                  </button>
-                </div>
-              </form>
             </div>
           </div>
         )}
